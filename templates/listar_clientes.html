@@ -1,0 +1,202 @@
+{% extends "base.html" %}
+
+{% block title %}Lista de Clientes - Sistema Academia{% endblock %}
+
+{% block content %}
+
+<div class="card" style="padding: 20px; border-radius: 10px;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <h2 style="color: #6a1b9a; margin: 0;">👥 Lista Completa de Clientes</h2>
+        <a href="{{ url_for('cadastrar_cliente') }}" class="btn" style="background: #6a1b9a; color: #fff;">+ Novo Cliente</a>
+
+
+    </div>
+
+    <form method="GET" action="{{ url_for('listar_clientes') }}" style="margin-bottom: 20px;">
+        <div style="display: flex; gap: 10px;">
+            <input type="text" name="q" placeholder="Pesquisar por nome..." value="{{ search_query }}" style="flex-grow: 1; padding: 8px; border-radius: 5px; border: 1px solid #ccc;">
+            <button type="submit" class="btn btn-small" style="background: #6a1b9a; color: #fff;">🔍 Buscar</button>
+            <a href="{{ url_for('listar_clientes') }}" class="btn btn-small" style="background-color: #f0f0f0; color: #333;">Limpar</a>
+        </div>
+    </form>
+    
+    {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+        {% for category, message in messages %}
+        <div class="alert alert-{{ 'success' if category == 'success' else 'danger' if category == 'error' else 'warning' }}">
+            {{ message }}
+        </div>
+        {% endfor %}
+    {% endif %}
+    {% endwith %}
+
+    {% if clientes_info %}
+        <div style="background: #e7f3ff; padding: 15px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #17a2b8;">
+            <strong>📊 Resumo:</strong> {{ clientes_info|length }} clientes encontrados
+        </div>
+
+        <div style="margin-bottom: 20px;">
+            <a href="{{ url_for('listar_clientes', status='todos') }}" class="btn btn-small" style="background: #9c27b0; color: #fff;">Mostrar Todos</a>
+            <a href="{{ url_for('listar_clientes', status='Em dia') }}" class="btn btn-small" style="background: #28a745; color: #fff;">Adimplentes</a>
+            <a href="{{ url_for('listar_clientes', status='Aguardando') }}" class="btn btn-small" style="background: #6c757d; color: #fff;">Aguardando</a>
+            <a href="{{ url_for('listar_clientes', status='Em atraso') }}" class="btn btn-small" style="background: #dc3545; color: #fff;">Inadimplentes</a>
+            <a href="{{ url_for('listar_clientes', status='inativos') }}" class="btn btn-small" style="background: #ff9800; color: #fff;">Inativos</a>
+        </div>
+
+
+        <div style="overflow-x: auto; border-radius: 10px; border: 1px solid #ddd;">
+            <table class="table table-striped" id="clientes-table" style="width: 100%; border-collapse: separate; border-spacing: 0;">
+                <thead style="background: #6a1b9a; color: #fff;">
+                    <tr>
+                        <th>Nome</th>
+                        <th>Telefone</th>
+                        <th>Mensalidade</th>
+                        <th>Vencimento</th>
+                        <th>Status</th>
+                        <th>Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in clientes_info %}
+                    <tr data-status="{{ item.status }}" style="border-bottom: 1px solid #ddd;">
+                        <td>
+                            <strong>{{ item.cliente.nome }}</strong>
+                            {% if not item.cliente.ativo %}
+                                <span style="color: #6c757d; font-size: 0.8em;">(Inativo)</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ item.cliente.telefone }}</td>
+                        <td>R$ {{ "%.2f"|format(item.cliente.valor_mensalidade) }}</td>
+                        <td>{{ item.cliente.dia_vencimento }}</td>
+                        <td>
+                            {% if item.status == 'Em dia' %}
+                                <span style="color: green; font-weight: bold;"><i class="fas fa-check-circle"></i> Em dia</span>
+                            {% elif item.status == 'Aguardando' %}
+                                <span style="color: orange; font-weight: bold;"><i class="fas fa-clock"></i> Aguardando</span>
+                            {% else %}
+                                <span style="color: red; font-weight: bold;"><i class="fas fa-times-circle"></i> Em atraso</span>
+                            {% endif %}
+                        </td>
+                        <td style="display: flex; gap: 5px; flex-wrap: wrap;">
+                            <a href="{{ url_for('historico_pagamento', cliente_id=item.cliente.id) }}" class="btn btn-small" style="background-color: #007bff; color: #fff;"><i class="fas fa-history"></i></a>
+                            <a href="{{ url_for('editar_cliente', cliente_id=item.cliente.id) }}" class="btn btn-small" style="background-color: #ffc107; color: #fff;"><i class="fas fa-edit"></i></a>
+                            {% if current_user.is_admin() %}
+                                {% if item.cliente.ativo %}
+                                <form action="{{ url_for('deletar_cliente', cliente_id=item.cliente.id) }}" method="POST" style="display: inline;">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <button type="submit" class="btn btn-small" style="background: #dc3545; color: #fff;" onclick="return confirm('Deseja desativar este cliente?')"><i class="fas fa-trash-alt"></i></button>
+                                </form>
+                                {% else %}
+                                <form action="{{ url_for('ativar_cliente', cliente_id=item.cliente.id) }}" method="POST" style="display: inline;">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <button type="submit" class="btn btn-small" style="background-color: #28a745; color: #fff;" onclick="return confirm('Deseja reativar este cliente?')"><i class="fas fa-redo"></i></button>
+                                </form>
+                                {% endif %}
+                            {% endif %}
+                            <button onclick="abrirModalPagamento({{ item.cliente.id }}, '{{ item.cliente.nome }}', {{ item.cliente.valor_mensalidade }})" class="btn btn-small" style="background-color: #20c997; color: #fff;"><i class="fas fa-money-bill-wave"></i></button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% else %}
+        <div class="alert alert-warning" style="text-align: center;">
+            <i class="fas fa-exclamation-triangle"></i> Nenhum cliente encontrado.
+        </div>
+    {% endif %}
+
+</div>
+
+<div id="modal-pagamento" class="modal">
+    <div class="modal-content">
+        <span class="close" onclick="fecharModalPagamento()">&times;</span>
+        <h3 id="pagamento-titulo">Registrar Pagamento</h3>
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <form id="form-pagamento" method="POST" action="{{ url_for('registrar_pagamento_manual', cliente_id=0) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" id="modal-cliente-id" name="cliente_id">
+            <p style="margin-bottom: 15px;">Cliente: <strong id="cliente-nome-modal"></strong></p>
+            <div class="form-group">
+                <label for="data_pagamento">Data do Pagamento:</label>
+                <input type="date" id="data_pagamento" name="data_pagamento" class="form-control" required>
+            </div>
+            <div class="form-group">
+                <label for="valor_pago">Valor Pago (R$):</label>
+                <input type="number" id="valor_pago" name="valor_pago" step="0.01" min="0" class="form-control" required>
+            </div>
+            <div class="form-group">
+                <label for="mes_referencia">Mês de Referência:</label>
+                <input type="number" id="mes_referencia" name="mes_referencia" min="1" max="12" class="form-control" required>
+            </div>
+            <div class="form-group">
+                <label for="ano_referencia">Ano de Referência:</label>
+                <input type="number" id="ano_referencia" name="ano_referencia" min="2020" max="2100" class="form-control" required>
+            </div>
+            <div class="form-group">
+                <label for="observacoes">Observações (opcional):</label>
+                <textarea id="observacoes" name="observacoes" class="form-control" rows="3"></textarea>
+            </div>
+            <div class="text-center">
+                <button type="submit" class="btn" style="background: #6a1b9a; color: #fff;">Registrar Pagamento</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<style>
+    .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.4); padding-top: 60px; }
+    .modal-content { background-color: #fff; margin: 5% auto; padding: 20px; border: 1px solid #888; width: 90%; max-width: 500px; border-radius: 10px; box-shadow: 0 5px 15px rgba(0,0,0,0.3); }
+    .close { color: #aaa; float: right; font-size: 28px; font-weight: bold; }
+    .close:hover, .close:focus { color: black; text-decoration: none; cursor: pointer; }
+    .form-group { margin-bottom: 15px; }
+    .form-control { width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+
+    .btn { padding: 8px 12px; border: none; border-radius: 5px; cursor: pointer; }
+    .btn:hover { opacity: 0.9; }
+    .btn-small { padding: 5px 8px; font-size: 0.85em; }
+</style>
+
+<script>
+function filtrarPor(tipo) {
+    const table = document.getElementById('clientes-table');
+    if (!table) return;
+
+    const rows = table.getElementsByTagName('tbody')[0].getElementsByTagName('tr');
+    
+    // Altera a opacidade dos botões
+    const buttons = document.querySelectorAll('div[style*="margin-bottom: 20px;"] .btn-small');
+    buttons.forEach(btn => btn.style.opacity = '0.6');
+    const selectedBtn = document.querySelector(`button[onclick="filtrarPor('${tipo}')"]`);
+    if (selectedBtn) selectedBtn.style.opacity = '1';
+    
+    for (let i = 0; i < rows.length; i++) {
+        const row = rows[i];
+        row.style.display = (tipo === 'todos' || row.getAttribute('data-status').toLowerCase() === tipo.toLowerCase()) ? '' : 'none';
+
+    }
+}
+
+function abrirModalPagamento(clienteId, clienteNome, valorMensalidade) {
+    document.getElementById('modal-cliente-id').value = clienteId;
+    document.getElementById('pagamento-titulo').textContent = `Registrar Pagamento de ${clienteNome}`;
+    document.getElementById('valor_pago').value = valorMensalidade.toFixed(2);
+    document.getElementById('form-pagamento').action = "/registrar_pagamento_manual/" + clienteId;
+    document.getElementById('modal-pagamento').style.display = 'block';
+    
+    const today = new Date();
+    document.getElementById('data_pagamento').value = today.toISOString().split('T')[0];
+    document.getElementById('mes_referencia').value = today.getMonth() + 1;
+    document.getElementById('ano_referencia').value = today.getFullYear();
+}
+
+function fecharModalPagamento() {
+    document.getElementById('modal-pagamento').style.display = 'none';
+}
+
+window.onclick = function(event) {
+    const modal = document.getElementById('modal-pagamento');
+    if (event.target == modal) modal.style.display = "none";
+};
+</script>
+{% endblock %}
