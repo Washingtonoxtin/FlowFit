@@ -19,3 +19,5 @@ class Config:
     
     # Debug
     DEBUG = os.getenv('FLASK_DEBUG', '0') == '1'
+
+    # base geral
